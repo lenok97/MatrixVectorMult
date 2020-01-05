@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 
 			workPerProc = n / size;
 			extraWork = n % size;;
-			int prefixSum = 0;
+			int totalDispl = 0;
 			// MPI_Scatterv/MPI_Gatherv params
 			for (int i = 0; i < size; i++)
 			{
@@ -97,9 +97,9 @@ int main(int argc, char *argv[])
 				if (i < extraWork)
 					recvcounts[i]++; 
 				sendcounts[i] = recvcounts[i] * n;
-				recvdispls[i] = prefixSum;
-				senddispls[i] = prefixSum * n;
-				prefixSum += recvcounts[i];
+				senddispls[i] = totalDispl * n;
+				recvdispls[i] = totalDispl;
+				totalDispl += recvcounts[i];
 			}
 			result = new int[n];
 		}
