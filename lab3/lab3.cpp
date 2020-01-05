@@ -14,134 +14,149 @@ void printMatrix(int n, int m, int* matrix)
 	{
 		for (int j = 0; j < n; j++)
 		{
-			cout << matrix[i, j] << '\t';
+			cout << matrix[n * i + j] << '\t';
 		}
 		cout << endl;
 	}
+	cout << endl;
 }
 
+void generateSimpleMatrix(int n, int m, int* matrix)
+{
+	for (int i = 0; i < m; i++)
+		for (int j = 0; j < n; j++)
+		{
+			matrix[n * i + j]=i;
+		}
+}
+
+void generateSimpleVector(int n, int* vector)
+{
+	for (int i = 0; i < n; i++)
+		vector[i] = 1;
+}
+
+void generateRandomMatrix(int n, int m, int* matrix)
+{
+	for (int i = 0; i < m; i++)
+		for (int j = 0; j < n; j++)
+		{
+			matrix[n * i + j] =  rand() % 100;
+		}
+}
 
 int main(int argc, char *argv[])
 {
-	int rank, size, M, N, workPerProc, extraWork, myRowsSize;
-	double endTime, startTime;
-	int* matrix = NULL;
-	int* vector = NULL;
-	int* result = NULL;
-	int* sendcounts = NULL;
-	int* senddispls = NULL;
-	int* recvcounts = NULL;
-	int* recvdispls = NULL;
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	if (rank == root)
-	{
-		cout << "Matrix multiplication by vector" << endl << "Process count = " << size << endl;
-		cout << "Enter the number of matrix rows:" << endl;
-		cin >> M;
-		if (M < 1)	return EXIT_FAILURE;
-		cout << "Enter the number of matrix columns:" << endl << endl;
-		cin >> N;
-		if (N < 1)	return EXIT_FAILURE;
+		int rank, size, M, N, workPerProc, extraWork, myRowsSize;
+		double endTime, startTime;
+		int* matrix = NULL;
+		int* vector = NULL;
+		int* result = NULL;
 
-		matrix = new int[M * N];
-		
-		cout << "matrix:" << endl;
-		for (int i = 0; i < M; ++i)
+		MPI_Init(&argc, &argv);
+		MPI_Comm_size(MPI_COMM_WORLD, &size);
+		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+		int* sendcounts = new int[size];
+		int* senddispls = new int[size];
+		int* recvcounts = new int[size];
+		int* recvdispls = new int[size];
+		while (true)
 		{
-			for (int j = 0; j < N; ++j)
+		if (rank == root)
+		{
+			cout << "Matrix multiplication by vector" << endl << "Process count = " << size << endl;
+			cout << "Enter the number of matrix rows:" << endl;
+			cin >> M;
+			cout << "Enter the number of matrix columns:" << endl << endl;
+			cin >> N;
+
+			matrix = new int[M * N];
+
+			cout << "matrix:" << endl;
+			generateSimpleMatrix(N, M, matrix);
+			//generateRandomMatrix(N, M, matrix);
+			if (N<100)
+				printMatrix(N, M, matrix);
+
+			vector = new int[N];
+			generateSimpleVector(N, vector);
+			//generateRandomMatrix(1, N, vector);
+			cout << "vector:" << endl;
+			if (N < 100)
+			printMatrix(1, N, vector);
+			startTime = MPI_Wtime();
+
+			workPerProc = M / size;
+			extraWork = M - workPerProc * size;
+			int prefixSum = 0;
+			for (int i = 0; i < size; ++i)
 			{
-				matrix[N * i + j] = rand() % 100;
-				cout << matrix[N * i + j] << '\t';
+				recvcounts[i] = (i < extraWork) ? workPerProc + 1 : workPerProc;
+				sendcounts[i] = recvcounts[i] * N;
+				recvdispls[i] = prefixSum;
+				senddispls[i] = prefixSum * N;
+				prefixSum += recvcounts[i];
 			}
-			cout << endl;
-		}
-		cout << endl;
-
-		vector = new int[N];
-		// generate vector
-		cout << "vector:" << endl;
-		for (int i = 0; i < N; ++i)
-		{
-			vector[i] = rand() & 100;
-			cout << vector[i]  << endl;
 		}
 
-		cout << endl;
-		startTime = MPI_Wtime();
-		sendcounts = new int[size];
-		senddispls = new int[size];
-		recvcounts = new int[size];
-		recvdispls = new int[size];
+		MPI_Bcast(&M, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-		workPerProc = M / size;
-		extraWork = M - workPerProc * size;
-		int prefixSum = 0;
-		for (int i = 0; i < size; ++i)
-		{
-			recvcounts[i] = (i < extraWork) ? workPerProc + 1 : workPerProc;
-			sendcounts[i] = recvcounts[i] * N;
-			recvdispls[i] = prefixSum;
-			senddispls[i] = prefixSum * N;
-			prefixSum += recvcounts[i];
-		}
-	}
+		if (rank != root)
+			vector = new int[N];
+		MPI_Bcast(vector, N, MPI_INT, 0, MPI_COMM_WORLD);
 
-	MPI_Bcast(&M, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-	if (0 != rank)
-		vector = new int[N];
-	MPI_Bcast(vector, N, MPI_INT, 0, MPI_COMM_WORLD);
-
-	if (rank != root)
-	{
 		workPerProc = M / size;
 		extraWork = M % size;
-	}
-	myRowsSize = rank < extraWork ? workPerProc + 1 : workPerProc;
-	int* matrixPart = new int[myRowsSize * N];
-	MPI_Scatterv(matrix, sendcounts, senddispls, MPI_INT, matrixPart, myRowsSize * N, MPI_INT, 0, MPI_COMM_WORLD);
-	if (0 == rank)
-	{
-		delete[] sendcounts;
-		delete[] senddispls;
-		delete[] matrix;
-	}
+		myRowsSize = rank < extraWork ? workPerProc + 1 : workPerProc;
+		int* matrixPart = new int[myRowsSize * N];
 
-	int* resultPart = new int[myRowsSize];
-
-	for (int i = 0; i < myRowsSize; ++i)
-	{
-		resultPart[i] = 0;
-		for (int j = 0; j < N; ++j)
+		// разбивает сообщение из буфера посылки процесса root на части
+		//Начало расположения элементов блока, посылаемого i - му процессу, 
+		//задается в массиве смещений displs, а число посылаемых элементов - в массиве sendcounts
+		MPI_Scatterv(matrix, sendcounts, senddispls, MPI_INT, matrixPart, myRowsSize * N, MPI_INT, root, MPI_COMM_WORLD);
+		if (rank == root)
 		{
-			resultPart[i] += matrixPart[i * N + j] * vector[j];
+			delete[] sendcounts;
+			delete[] senddispls;
+			delete[] matrix;
 		}
-	}
-	delete[] matrixPart;
-	delete[] vector;
 
-	if (rank == root)
-		result = new int[M];
-	MPI_Gatherv(resultPart, myRowsSize, MPI_INT, result, recvcounts, recvdispls, MPI_INT, 0, MPI_COMM_WORLD);
-	delete[] resultPart;
-	if (rank == root)
-	{
-		endTime = MPI_Wtime();
-		delete[] recvcounts;
-		delete[] recvdispls;
-		cout << "result:" << endl;
-		//for (int i = 0; i < M; ++i)
-		//	cout << result[i] <<endl;
-		printMatrix(M, 1, result);
+		int* resultPart = new int[myRowsSize];
 
+		for (int i = 0; i < myRowsSize; ++i)
+		{
+			resultPart[i] = 0;
+			for (int j = 0; j < N; ++j)
+			{
+				resultPart[i] += matrixPart[i * N + j] * vector[j];
+			}
+		}
+		delete[] matrixPart;
+		delete[] vector;
 
-		cout <<endl<< "Time elapsed: " << (endTime - startTime) * 1000 << "ms\n" << endl << endl;
-		cout << endl;
-		delete[] result;
+		if (rank == root)
+			result = new int[M];
+		//собирает блоки с разным числом элементов от каждого процесса, 
+		//количество элементов, принимаемых от каждого процесса, задается в массиве recvcounts.
+		//Эта функция обеспечивает также большую гибкость при размещении данных в процессе - получателе, 
+		//благодаря введению в качестве параметра массива смещений displs.
+		MPI_Gatherv(resultPart, myRowsSize, MPI_INT, result, recvcounts, recvdispls, MPI_INT, root, MPI_COMM_WORLD);
+		delete[] resultPart;
+		if (rank == root)
+		{
+			endTime = MPI_Wtime();
+			delete[] recvcounts;
+			delete[] recvdispls;
+			cout << "result:" << endl;
+			printMatrix(1, N, result);
+			delete[] result;
+			cout << endl << "Time elapsed: " << (endTime - startTime) * 1000 << "ms\n" << endl;
+		}
+
 	}
 	MPI_Finalize();
 	return 0;
