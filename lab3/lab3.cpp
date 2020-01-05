@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
 		}
 		// printMatrix(n, rowsCount, matrixPart);
 		int* tempResult = new int[rowsCount];
-		for (int i = 0; i < rowsCount; ++i)
+		for (int i = 0; i < rowsCount; i++)
 		{
 			tempResult[i] = 0;
 			for (int j = 0; j < n; j++)
