@@ -54,9 +54,9 @@ int main(int argc, char *argv[])
 		int* vector = NULL;
 		int* result = NULL;
 		// MPI_Scatterv/MPI_Gatherv params
-		int* sendcounts = new int[size]; //количество элементов, принимаемых от каждого процесса
+		int* sendcounts = new int[size]; //количество элементов, отправляемых каждым процессом
 		int* senddispls = new int[size]; //начало расположения элементов блока, посылаемого i-му процессу
-		int* recvcounts = new int[size]; //количество элементов, отправляемых каждым процессом
+		int* recvcounts = new int[size]; //количество элементов, принимаемых от каждого процесса
 		int* recvdispls = new int[size]; //начало расположения элементов блока, принимаемых от i-ого процесса
 
 		if (rank == root)
@@ -118,13 +118,7 @@ int main(int argc, char *argv[])
 		
 		// разбивает сообщение из буфера посылки процесса root на части
 		MPI_Scatterv(matrix, sendcounts, senddispls, MPI_INT, matrixPart, rowsCount * n, MPI_INT, root, MPI_COMM_WORLD);
-		if (rank == root)
-		{
-			delete[] sendcounts;
-			delete[] senddispls;
-			delete[] matrix;
-		}
-		// printMatrix(n, rowsCount, matrixPart);
+
 		int* tempResult = new int[rowsCount];
 		for (int i = 0; i < rowsCount; i++)
 		{
@@ -134,22 +128,15 @@ int main(int argc, char *argv[])
 				tempResult[i] += matrixPart[i *n + j] * vector[j];
 			}
 		}
-		// printMatrix(rowsCount, 1, tempResult);
 
 		// собирает блоки с разным числом элементов от каждого процесса
 		MPI_Gatherv(tempResult, rowsCount, MPI_INT, result, recvcounts, recvdispls, MPI_INT, root, MPI_COMM_WORLD);
-		delete[] matrixPart;
-		delete[] vector;
-		delete[] tempResult;
 
 		if (rank == root)
 		{
 			endTime = MPI_Wtime();
 			cout << "result:" << endl;
 			printMatrix(1, n, result);
-			delete[] recvcounts;
-			delete[] recvdispls;
-			delete[] result;
 			cout << endl << "Time elapsed: " << (endTime - startTime) * 1000 << "ms\n" << endl;
 			randomMatrix = !randomMatrix;
 		}
